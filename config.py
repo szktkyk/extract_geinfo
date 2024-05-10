@@ -1,6 +1,5 @@
 import re
 import datetime
-import requests
 import xml.etree.ElementTree as ET
 
 API_GENEID_BASE = "http://127.0.0.1:8000/search_geneid/?id=" 
@@ -20,6 +19,8 @@ PATH = {
     "genes_not_in_gem":"./ospd/gem/ospd_146geneids_genes_not_in_gem.txt",
     "gem_results":"./ospd/gem/ospd_146geneids_results.csv",
     "llm_results":f"./ospd/llm/{date}_output.jsonl",
+    "curation_data":"./ospd/curation/curated_gem_results_146geneids.csv",
+    "accuracy_results": "./ospd/accuracy/ospd_146geneids_evaluate.csv",
 }
 
 # referenced by the 8th annual meeting of the japanese society for genome editing abstract book.
