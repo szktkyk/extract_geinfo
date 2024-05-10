@@ -166,3 +166,4 @@ log/
 output.arrow
 ospd/
 ref_data/*_pubdetails.csv
+cache/
