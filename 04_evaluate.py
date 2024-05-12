@@ -1,7 +1,56 @@
+# install NCBI datasets cli if you use this script
+
 import polars as pl
 import config
+import subprocess
+import json
+import ast
+import csv
 
-def main():    
+def main():  
+    # 遺伝子txtファイルの読み込み
+    # aliasをリスト化しておく
+    # with open(config.PATH["geneid_list"]) as f:
+    #     geneids = f.read().splitlines()
+    # synonyms_data = []
+    # for geneid in geneids:
+    #     geneid = int(geneid)
+    #     synonyms, genename = get_genesynonyms_from_geneid(geneid)
+    #     if type(synonyms) != list:
+    #         synonyms = ast.literal_eval(synonyms)
+    #     else:
+    #         synonyms = synonyms
+    #     synonyms.append(genename)
+    #     synonyms_data.append({"gene": genename,"synonyms": synonyms})
+    #     print({"gene": genename,"synonyms": synonyms})
+    # field_name_gene = ["gene","synonyms",]
+    # with open(
+    # f"./ospd/accuracy/synonyms.csv","w",) as csvfile:
+    #     writer = csv.DictWriter(csvfile, fieldnames=field_name_gene)
+    #     writer.writeheader()
+    #     writer.writerows(synonyms_data)
+    
+    # csvファイルを読み込む
+    synonyms_df = pl.read_csv("./ospd/accuracy/synonyms.csv")
+    synonyms_data = synonyms_df.to_dicts()
+    
+    # evaluate方法(2)
+    # llmの結果で、getoolとgeeventが"not mentioned"の場合は、"targeted_genes"も"not mentioned"に変更する処理。
+    # df_llm = pl.read_ndjson("./ospd/llm/output_geneids.jsonl")
+    # llm_data_list = df_llm.to_dicts()
+    # new_llm_data = []
+    # for llm_data in llm_data_list:
+    #     if llm_data['genome_editing_tools'] == ['Not mentioned'] and llm_data['genome_editing_event'] == ['Not mentioned']:
+    #         llm_data['targeted_genes'] = ['Not mentioned']
+    #         new_llm_data.append(llm_data)
+    #     else:
+    #         new_llm_data.append(llm_data)
+    # df_new_llm = pl.DataFrame(new_llm_data)
+    # # jsonlで書き出す
+    # df_new_llm.write_ndjson("./ospd/llm/output_geneids_repaired.jsonl")
+    # exit()
+            
+ 
     # pmidリストを読み込む
     with open(config.PATH["pmids_results"]) as f:
         pmid_list = f.read().splitlines()
@@ -26,8 +75,8 @@ def main():
     
     # LLMの結果を読み込む
     # ターゲット遺伝子に関する正解率の評価
-    df_llm = pl.read_ndjson("./ospd/llm/output_geneids.jsonl")
-    df_results, accuracy = step1(pmid_list, df_ann, df_llm, config.PATH["accuracy_results"])
+    df_llm = pl.read_ndjson("./ospd/llm/output_geneids_repaired.jsonl")
+    df_results, accuracy = step1(pmid_list, df_ann, df_llm, "./ospd/accuracy/ospd_146geneids_evaluate_repaired.csv", synonyms_data)
     print(df_results)
     print(f"Accuracy for step1: {accuracy}")
     
@@ -38,7 +87,7 @@ def main():
 
     exit()
 
-def step1(pmid_list, df_ann, df_llm, outputfilepath):
+def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
     """
     ターゲット遺伝子を選抜できているかどうか、正解率を算出する
     """
@@ -53,8 +102,13 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath):
         for gene in ann_genes:
             gene = gene.split(" (")[0]
             gene = gene.lower()
-            # print(f"gene: {gene}")
-            if gene in llm_genes:
+            target_dict = next((item for item in synonyms_data if item.get("gene") == gene), None)
+            synonyms = target_dict["synonyms"]
+            if type(synonyms) != list:
+                synonyms = ast.literal_eval(synonyms)
+            else:
+                synonyms = synonyms
+            if any(gene in synonyms for gene in llm_genes):
                 curation = row_ann["curation_gene"][0]
                 if curation == 1:
                     results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Correct"})
@@ -108,6 +162,48 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath):
 #     correct = len(df_results.filter(df_results["result"] == "Correct"))
 #     accuracy = correct / total
 #     return df_results, accuracy
+
+
+def get_genesynonyms_from_genesymbol(gene_name, taxid):
+    req2 = subprocess.run(
+        ["datasets", "summary", "gene", "symbol", "{}".format(gene_name), "--taxon", "{}".format(taxid)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        req_gene = json.loads(req2.stdout.decode())
+        if req_gene["total_count"] == 0:
+            print("no gene from genesymbol..")
+            synonyms = []
+        else:
+            synonyms = req_gene["reports"][0]["gene"]["synonyms"]
+    except:
+        print(f"error at synonyms from genesymbol {gene_name}...")
+        synonyms = []
+
+    return synonyms
+
+def get_genesynonyms_from_geneid(geneid):
+    req2 = subprocess.run(
+        ["datasets", "summary", "gene", "gene-id", "{}".format(geneid)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    req_gene = json.loads(req2.stdout.decode())
+    if req_gene["total_count"] == 0:
+        print(f"no gene from genesymbol {geneid}..")
+        synonyms = []
+        gene_name = ""
+    else:
+        gene_name = req_gene["reports"][0]["gene"]["symbol"]
+        gene_name = gene_name.lower()
+        try:
+            synonyms = req_gene["reports"][0]["gene"]["synonyms"]
+            synonyms = [synonym.lower() for synonym in synonyms]
+        except:
+            synonyms = []
+
+    return synonyms, gene_name
 
 if __name__ == "__main__":
     main()
