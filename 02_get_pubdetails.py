@@ -9,7 +9,7 @@ load_dotenv()
 
 def main():
     # # 現状のPMIDリストを取得
-    with open(config.PATH["pmids_results"]) as file:
+    with open("./ospd/gem/158genes_pmids.txt") as file:
         pmids_list = file.read().splitlines() 
 
     print(f"number of pmids : {len(pmids_list)}")

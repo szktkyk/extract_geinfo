@@ -3,24 +3,28 @@ import polars as pl
 import config
 
 def main():
-    # geneids_listをクエリーにして、gemを検索
-    results, new_genes = search_gem(config.PATH["geneid_list"], config.API_GENEID_BASE)
-    pmids = list(set([i["pmid"] for i in results]))
+    # (1) geneids_listをクエリーにして、gemを検索
+    # results, new_genes = search_gem(config.PATH["geneid_list"], config.API_GENEID_BASE)
+    # pmids = list(set([i["pmid"] for i in results]))
+    
+    # (2) gene_listをクエリーにして、gemを検索
+    results, new_genes = search_gem(config.PATH["gene_list"], config.API_GENE_BASE)
+    pmids = list(set([i["pmid"] for i in results]))   
  
     # ヒットしたPMIDを書き出す
-    with open(config.PATH["pmids_results"], "w") as file:
+    with open("./ospd/gem/158genes_pmids.txt", "w") as file:
         for pmid in pmids:
             pmid = str(pmid)
             file.write(pmid + "\n")
 
     # gemにヒットしなかった遺伝子を書き出す
-    with open(config.PATH["genes_not_in_gem"], "w") as file:
+    with open("./ospd/gem/158genes_genes_not_in.txt", "w") as file:
         for gene in new_genes:
             file.write(gene + "\n")
 
     # gemの検索結果をcsvに書き出す
     df_gem_results = pl.DataFrame(results)
-    df_gem_results.write_csv(config.PATH["gem_results"])   
+    df_gem_results.write_csv("./ospd/gem/158genes_results.csv")   
 
 
 def search_gem(filepath, apibase):

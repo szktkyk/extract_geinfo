@@ -15,10 +15,9 @@ date = now.strftime("%Y%m%d")
 PATH = {
     "gene_list":"./ospd/genes/gene_list.txt",
     "geneid_list":"./ospd/genes/geneid_list.txt",
-    "pmids_results":"./ospd/gem/ospd_pmids_146geneids.txt",
-    "genes_not_in_gem":"./ospd/gem/ospd_146geneids_genes_not_in_gem.txt",
     "gem_results":"./ospd/gem/ospd_146geneids_results.csv",
     "curation_data":"./ospd/curation/curated_gem_results_146geneids.csv",
+    # "llm_results":"./ospd/llm/158genes_llm_results.jsonl",
 }
 
 # referenced by the 8th annual meeting of the japanese society for genome editing abstract book.

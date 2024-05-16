@@ -6,53 +6,22 @@ import subprocess
 import json
 import ast
 import csv
+import json
+
+SYNONYM_PATH = "./ospd/accuracy/synonyms.csv"
+PMID_TXT_PATH = "./ospd/gem/ospd_pmids_146geneids.txt"
+
 
 def main():  
-    # 遺伝子txtファイルの読み込み
-    # aliasをリスト化しておく
-    # with open(config.PATH["geneid_list"]) as f:
-    #     geneids = f.read().splitlines()
-    # synonyms_data = []
-    # for geneid in geneids:
-    #     geneid = int(geneid)
-    #     synonyms, genename = get_genesynonyms_from_geneid(geneid)
-    #     if type(synonyms) != list:
-    #         synonyms = ast.literal_eval(synonyms)
-    #     else:
-    #         synonyms = synonyms
-    #     synonyms.append(genename)
-    #     synonyms_data.append({"gene": genename,"synonyms": synonyms})
-    #     print({"gene": genename,"synonyms": synonyms})
-    # field_name_gene = ["gene","synonyms",]
-    # with open(
-    # f"./ospd/accuracy/synonyms.csv","w",) as csvfile:
-    #     writer = csv.DictWriter(csvfile, fieldnames=field_name_gene)
-    #     writer.writeheader()
-    #     writer.writerows(synonyms_data)
+    # 遺伝子のsynonymsリストを作成する
+    # make_synonyms_list(config.PATH["geneid_list"], "./ospd/accuracy/synonyms.csv")
     
-    # csvファイルを読み込む
-    synonyms_df = pl.read_csv("./ospd/accuracy/synonyms.csv")
+    # 事前に作成済みsynonymsのcsvファイルを読み込む
+    synonyms_df = pl.read_csv(SYNONYM_PATH)
     synonyms_data = synonyms_df.to_dicts()
     
-    # evaluate方法(2)
-    # llmの結果で、getoolとgeeventが"not mentioned"の場合は、"targeted_genes"も"not mentioned"に変更する処理。
-    # df_llm = pl.read_ndjson("./ospd/llm/output_geneids.jsonl")
-    # llm_data_list = df_llm.to_dicts()
-    # new_llm_data = []
-    # for llm_data in llm_data_list:
-    #     if llm_data['genome_editing_tools'] == ['Not mentioned'] and llm_data['genome_editing_event'] == ['Not mentioned']:
-    #         llm_data['targeted_genes'] = ['Not mentioned']
-    #         new_llm_data.append(llm_data)
-    #     else:
-    #         new_llm_data.append(llm_data)
-    # df_new_llm = pl.DataFrame(new_llm_data)
-    # # jsonlで書き出す
-    # df_new_llm.write_ndjson("./ospd/llm/output_geneids_repaired.jsonl")
-    # exit()
-            
- 
     # pmidリストを読み込む
-    with open(config.PATH["pmids_results"]) as f:
+    with open(PMID_TXT_PATH) as f:
         pmid_list = f.read().splitlines()
     pmid_list = list(set(pmid_list))
     print(f"Number of PMIDs: {len(pmid_list)}")
@@ -73,19 +42,19 @@ def main():
     print(total)
     print(f"Accuracy at the time of GEM: {accuracy}")
     
+    # LLM結果を修正する
+    repair_llm_result_part1("./ospd/llm/146geneids_gpt4o/gpt4o_146geneids_llm_results.jsonl", "./ospd/llm/146geneids_gpt4o/repair1.jsonl")
+    repair_llm_result_part2("./ospd/llm/146geneids_gpt4o/repair1.jsonl", "./ospd/llm/146geneids_gpt4o/repair2.jsonl")
+    
+    
     # LLMの結果を読み込む
     # ターゲット遺伝子に関する正解率の評価
-    df_llm = pl.read_ndjson("./ospd/llm/output_geneids_repaired.jsonl")
-    df_results, accuracy = step1(pmid_list, df_ann, df_llm, "./ospd/accuracy/ospd_146geneids_evaluate_repaired.csv", synonyms_data)
+    df_llm = pl.read_ndjson("./ospd/llm/146geneids_gpt4o/repair2.jsonl")
+    df_results, accuracy = step1(pmid_list, df_ann, df_llm, "./ospd/accuracy/146geneids_gpt4o/evaluate_results.csv", synonyms_data)
     print(df_results)
     print(f"Accuracy for step1: {accuracy}")
-    
-    # # 編集タイプに関する正解率の評価
-    # df_results_species, accuracy_species = step2(pmid_list, df_ann, df_llm)
-    # print(df_results_species)
-    # print(f"Accuracy for step2: {accuracy_species}")
 
-    exit()
+
 
 def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
     """
@@ -96,6 +65,7 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
         row_ann = df_ann.filter(df_ann["pmid"] == pmid)
         ann_genes = row_ann["genesymbol"].to_list()
         row_llm = df_llm.filter(df_llm["pmid"] == pmid)
+        llm_species = row_llm["species"][0].to_list()
         llm_genes = row_llm["targeted_genes"][0].to_list()
         llm_genes = [gene.lower() for gene in llm_genes]
         # print(f"llm_genes: {llm_genes}")
@@ -108,7 +78,7 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
                 synonyms = ast.literal_eval(synonyms)
             else:
                 synonyms = synonyms
-            if any(gene in synonyms for gene in llm_genes):
+            if any(alias in synonyms for alias in llm_genes):
                 curation = row_ann["curation_gene"][0]
                 if curation == 1:
                     results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Correct"})
@@ -204,6 +174,70 @@ def get_genesynonyms_from_geneid(geneid):
             synonyms = []
 
     return synonyms, gene_name
+
+
+def make_synonyms_list(geneid_list_path, outputfilepath):
+    # 遺伝子txtファイルの読み込み
+    # aliasをリスト化しておく
+    with open(geneid_list_path) as f:
+        geneids = f.read().splitlines()
+    synonyms_data = []
+    for geneid in geneids:
+        geneid = int(geneid)
+        synonyms, genename = get_genesynonyms_from_geneid(geneid)
+        if type(synonyms) != list:
+            synonyms = ast.literal_eval(synonyms)
+        else:
+            synonyms = synonyms
+        synonyms.append(genename)
+        synonyms_data.append({"gene": genename,"synonyms": synonyms})
+        print({"gene": genename,"synonyms": synonyms})
+    field_name_gene = ["gene","synonyms",]
+    with open(outputfilepath,"w",) as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=field_name_gene)
+        writer.writeheader()
+        writer.writerows(synonyms_data) 
+
+
+def repair_llm_result_part1(llm_output, repaired_output ):
+    # evaluate方法(2)
+    # llmの結果で、getoolとgeeventが"not mentioned"の場合は、"targeted_genes"も"not mentioned"に変更する処理。
+    df_llm = pl.read_ndjson(llm_output,)
+    llm_data_list = df_llm.to_dicts()
+    new_llm_data = []
+    for llm_data in llm_data_list:
+        if llm_data['genome_editing_tools'] == ['Not mentioned'] and llm_data['genome_editing_event'] == ['Not mentioned']:
+            llm_data['targeted_genes'] = ['Not mentioned']
+            new_llm_data.append(llm_data)
+        else:
+            new_llm_data.append(llm_data)
+    df_new_llm = pl.DataFrame(new_llm_data)
+    # jsonlで書き出す
+    df_new_llm.write_ndjson(repaired_output)
+
+
+def repair_llm_result_part2(llm_output, repaired_output):
+    # evaluate方法 (3)
+    # speciesにHomo sapiensがない場合は、"Not mentioned"に変更する処理
+    df_llm = pl.read_ndjson(llm_output)
+    llm_data_list = df_llm.to_dicts()
+    new_llm_data = []
+    for llm_data in llm_data_list:
+        species = llm_data['species']
+        if type(species) != list:
+            species = ast.literal(species)
+        else:
+            species = species
+        if "Homo sapiens" not in species:
+            llm_data["targeted_genes"] = ["DIF_SPECIES"]
+            new_llm_data.append(llm_data)
+        else:
+            new_llm_data.append(llm_data)
+    df_new_llm = pl.DataFrame(new_llm_data)
+    # jsonlで書き出す
+    df_new_llm.write_ndjson(repaired_output)
+
+
 
 if __name__ == "__main__":
     main()
