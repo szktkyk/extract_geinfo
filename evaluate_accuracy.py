@@ -43,14 +43,14 @@ def main():
     print(f"Accuracy at the time of GEM: {accuracy}")
     
     # LLM結果を修正する
-    repair_llm_result_part1("./ospd/llm/146geneids_gpt4o/gpt4o_146geneids_llm_results.jsonl", "./ospd/llm/146geneids_gpt4o/repair1.jsonl")
-    repair_llm_result_part2("./ospd/llm/146geneids_gpt4o/repair1.jsonl", "./ospd/llm/146geneids_gpt4o/repair2.jsonl")
+    repair_llm_result_part1("./ospd/llm/146geneids_llama3/20240517_146geneids_llama70b.jsonl", "./ospd/llm/146geneids_llama3/repair1_llama3.jsonl")
+    repair_llm_result_part2("./ospd/llm/146geneids_llama3/repair1_llama3.jsonl", "./ospd/llm/146geneids_llama3/repair2_llama3.jsonl")
     
     
     # LLMの結果を読み込む
     # ターゲット遺伝子に関する正解率の評価
-    df_llm = pl.read_ndjson("./ospd/llm/146geneids_gpt4o/repair2.jsonl")
-    df_results, accuracy = step1(pmid_list, df_ann, df_llm, "./ospd/accuracy/146geneids_gpt4o/evaluate_results.csv", synonyms_data)
+    df_llm = pl.read_ndjson("./ospd/llm/146geneids_llama3/repair2_llama3.jsonl")
+    df_results, accuracy = step1(pmid_list, df_ann, df_llm, "./ospd/accuracy/146geneids_llama3/evaluate_results.csv", synonyms_data)
     print(df_results)
     print(f"Accuracy for step1: {accuracy}")
 
