@@ -9,7 +9,7 @@ load_dotenv()
 
 def main():
     # # 現状のPMIDリストを取得
-    with open("./ospd/gem/158genes_pmids.txt") as file:
+    with open(config.PATH["pmids_list"]) as file:
         pmids_list = file.read().splitlines() 
 
     print(f"number of pmids : {len(pmids_list)}")
@@ -26,7 +26,9 @@ def main():
         "keyword",
         "abstract",
         "mesh",
-        "getools"
+        "getools",
+        "methods",
+        "results"
     ]
 
     with open(f"./ref_data/{config.date}_pubdetails.csv", "w",) as csvfile:
@@ -90,6 +92,16 @@ def get_pubdetails(pmids:list, max_len:int):
             )
             if pmcid == "":
                 pmcid = "Not found"
+            else:
+                try:
+                    tree = get_xml_from_pmcid(pmcid) 
+                    methods_str = ",".join(parse_section_pmc(tree, "METHODS"))
+                    results_str = ",".join(parse_section_pmc(tree, "RESULTS"))
+                except:
+                    methods_str = ""
+                    results_str = ""
+                    print(f"pmcid:{pmcid} is not open to use with API...")
+               
 
             element_title = element.find("./MedlineCitation/Article/ArticleTitle")
             title = "".join(element_title.itertext())
@@ -183,6 +195,8 @@ def get_pubdetails(pmids:list, max_len:int):
                     "abstract": abstract,
                     "mesh": mesh_list,
                     "getools": getools,
+                    "methods": methods_str,
+                    "results": results_str
                 }
             )
             
@@ -270,6 +284,54 @@ def use_eutils(api_url):
     req.raise_for_status()
     tree = ET.fromstring(req.content)
     return tree
+
+def get_xml_from_pmcid(pmcid_str):
+    """
+    Get full text XML file from pmcid. only one ID at a time is possible.
+
+    Parameters:
+    ------
+    pmcid_str: str
+        a pmcid
+
+    Returns:
+    -------
+    tree: tree
+        tree element in XML
+    """
+    fulltext_api_url = "https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/pmcoa.cgi/BioC_xml/{}/unicode"
+    api_url = fulltext_api_url.format(pmcid_str)
+    print(api_url)
+    req = requests.get(api_url)
+    req.raise_for_status()
+    tree = ET.fromstring(req.content)
+    # tree_text = minidom.parseString(ET.tostring(tree)).toprettyxml(indent="    ")
+    return tree
+
+def parse_section_pmc(tree: str, section: str) -> list:
+    """
+    Parameters:
+    -----------
+    tree: str
+        PMC fulltext tree element in XML
+
+    section: str
+        name of the pmc section (RESULTS, METHODS, etc) to parse
+
+    Returns:
+    -------------
+    methods_fulltext: list
+        A list of all strings from the chosen section
+    """
+
+    section_fulltext_list = []
+    passages = tree.findall("./document/passage")
+    for passage in passages:
+        if passage.find("infon").text == section:
+            part_of_section = passage.find("text").text
+            section_fulltext_list.append(part_of_section)
+
+    return section_fulltext_list
 
 
 if __name__ == "__main__":

@@ -13,12 +13,29 @@ date = now.strftime("%Y%m%d")
 
 
 PATH = {
-    "gene_list":"./ospd/genes/gene_list.txt",
-    "geneid_list":"./ospd/genes/geneid_list.txt",
-    "gem_results":"./ospd/gem/ospd_146geneids_results.csv",
-    "curation_data":"./ospd/curation/curated_gem_results_146geneids.csv",
-    # "llm_results":"./ospd/llm/158genes_llm_results.jsonl",
+    # for `01_search_gem.py`
+    "gene_list":"./ospd/genes/158gene_list.txt",
+    "geneid_list":None,
+    "pmids_list":"./ospd/gemsearch/240802_pmids_146geneids.txt",
+    # "pmids_list":"./ospd/gemsearch/test.txt",
+    "genes_not_hit_in_gem":"./ospd/gemsearch/158genes_not_hit.txt",
+    "gem_results":"./ospd/gemsearch/ospd_158genes_results.csv",
+    # for `03_run_gpt4omini.py`
+    "gem_path":"./ref_data/20240710_ge_metadata_all.csv",
+    "pmids_metadata":"./ref_data/20240802_pubdetails.csv",
+    "llm_results":"./ospd/llm/240802_158genes_gpt4o.jsonl",
+    # for `04_run_llama3.py`
+    "llama3_results":"./ospd/llm/240802_158genes_llama70b.jsonl",
+    # for `evaluate_accuracy.py`
+    "curation_data":"./ref_data/240717_curated_gem_results_146geneids.csv",
+    "synonyms_list":"./ref_data/synonyms.csv",
+    "repaired_llm_results1":"./ospd/llm/240802_158genes_repaired1.jsonl",
+    "repaired_llm_results2":"./ospd/llm/240802_158genes_repaired2.jsonl",
+    "accuracy":"./ospd/240802_evaluate_results_158genes.csv",
+    # for `evaluate_deg.py`
+    "accuracy_deg":"./ospd/240802_evaluate_results_158genes_deg.csv"
 }
+
 
 # referenced by the 8th annual meeting of the japanese society for genome editing abstract book.
 parse_patterns = {

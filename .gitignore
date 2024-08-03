@@ -161,11 +161,10 @@ cython_debug/
 
 
 .env
-format_ann.py
 log/
-output.arrow
 ospd/
 ref_data/*_pubdetails.csv
+ref_data/*_pubdetails_146genes.csv
 cache/
-scores.arrow
-app_data/
+OLD_03_run_gpt.py
+ref_data/240717_curated*
