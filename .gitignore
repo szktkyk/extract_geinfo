@@ -168,3 +168,5 @@ ref_data/*_pubdetails_146genes.csv
 cache/
 OLD_03_run_gpt.py
 ref_data/240717_curated*
+ref_data/2408*
+ref_data/OLD*

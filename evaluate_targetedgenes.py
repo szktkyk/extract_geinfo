@@ -23,7 +23,6 @@ def main():
     
     # repair LLM results
     repair_llm_result_part1(config.PATH["llm_results"], config.PATH["repaired_llm_results1"])
-    repair_llm_result_part2(config.PATH["repaired_llm_results1"], config.PATH["repaired_llm_results2"])    
     
     # read pmids_list.txt
     with open(config.PATH["pmids_list"]) as f:
@@ -32,9 +31,12 @@ def main():
     print(f"Number of PMIDs: {len(pmid_list)}")
     
     # only 259 pmids are used for evaluation
-    df_llm = pl.read_ndjson(config.PATH["repaired_llm_results2"])
+    df_llm = pl.read_ndjson(config.PATH["repaired_llm_results1"])
     llm_data_list = df_llm.to_dicts()
-    llm_data_list = [llm_data for llm_data in llm_data_list if llm_data["pmid"] in pmid_list]
+    # llm_data_list = [llm_data for llm_data in llm_data_list if llm_data["pmid"] in pmid_list]
+    for llm_data in llm_data_list:
+        if llm_data["pmid"] not in pmid_list:
+            llm_data_list.remove(llm_data)
     df_llm = pl.DataFrame(llm_data_list)
     
     # load curated data
@@ -94,6 +96,10 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
         llm_genes = [gene.lower() for gene in llm_genes]
         # print(f"llm_genes: {llm_genes}")
         for gene in ann_genes:
+            if len(row_ann) > 1:
+                row_ann2 = row_ann.filter(row_ann["genesymbol"] == gene)
+            else:
+                row_ann2 = row_ann
             gene = gene.split(" (")[0]
             gene = gene.lower()
             target_dict = next((item for item in synonyms_data if item.get("gene") == gene), None)
@@ -103,9 +109,16 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
             else:
                 synonyms = synonyms
             if any(alias in synonyms for alias in llm_genes):
-                curation = row_ann["curation_gene"][0]
+                # row_ann2 = row_ann.filter(row_ann["genesymbol"] == gene)
+                curation = row_ann2["curation_gene"][0]
                 if curation == 1:
                     results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Correct"})
+                elif curation == 2:
+                    species = row_ann2["memo"][0]
+                    if species in llm_species:
+                        results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Correct"})
+                    else:
+                        results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Incorrect"})
                 else:
                     results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Incorrect"})
             else:
@@ -179,8 +192,8 @@ def make_synonyms_list(geneid_list_path, outputfilepath):
     """
     make a list of synonyms
     """
-    # 遺伝子txtファイルの読み込み
-    # aliasをリスト化しておく
+    # read gene text file
+    # prepare alias as a list
     with open(geneid_list_path) as f:
         geneids = f.read().splitlines()
     synonyms_data = []
@@ -204,42 +217,28 @@ def make_synonyms_list(geneid_list_path, outputfilepath):
 def repair_llm_result_part1(llm_output, repaired_output):
     # for evaluation
     # if genome_editing_tools and genome_editing_event are "not mentioned", targeted_genes should be "not mentioned"
-    # llmの結果で、getoolとgeeventが"not mentioned"の場合は、"targeted_genes"も"not mentioned"に変更する処理。
     df_llm = pl.read_ndjson(llm_output)
     llm_data_list = df_llm.to_dicts()
     new_llm_data = []
     for llm_data in llm_data_list:
-        if llm_data['genome_editing_tools'] == ['Not mentioned'] and llm_data['genome_editing_event'] == ['Not mentioned']:
+        # if llm_data['genome_editing_tools'] == ['Not mentioned'] and llm_data['genome_editing_event'] == ['Not mentioned']:
+        if llm_data['genome_editing_tools'] == ['Not mentioned']:    
             llm_data['targeted_genes'] = ['Not mentioned']
             new_llm_data.append(llm_data)
+        elif llm_data['genome_editing_tools'] == ['NotFound']:
+            llm_data['targeted_genes'] = ['Not mentioned']
+            new_llm_data.append(llm_data)
+        elif llm_data['genome_editing_tools'] == ['siRNA']:
+            llm_data['targeted_genes'] = ['Not mentioned']
+            new_llm_data.append(llm_data)            
+        # elif llm_data['genome_editing_tools'] == ['NotFound'] and llm_data['genome_editing_event'] == ['Not mentioned']:
+        #     llm_data['targeted_genes'] = ['Not mentioned']
+        #     new_llm_data.append(llm_data)
         else:
             new_llm_data.append(llm_data)
     df_new_llm = pl.DataFrame(new_llm_data)
-    # jsonlで書き出す
     df_new_llm.write_ndjson(repaired_output)
 
-
-def repair_llm_result_part2(llm_output, repaired_output):
-    # for evaluation
-    # if species does not contain "Homo sapiens", genes should be "not mentioned"
-    # speciesにHomo sapiensがない場合は、"Not mentioned"に変更する処理
-    df_llm = pl.read_ndjson(llm_output)
-    llm_data_list = df_llm.to_dicts()
-    new_llm_data = []
-    for llm_data in llm_data_list:
-        species = llm_data['species']
-        if type(species) != list:
-            species = ast.literal(species)
-        else:
-            species = species
-        if "Homo sapiens" not in species:
-            llm_data["targeted_genes"] = ["DIF_SPECIES"]
-            new_llm_data.append(llm_data)
-        else:
-            new_llm_data.append(llm_data)
-    df_new_llm = pl.DataFrame(new_llm_data)
-    # jsonlで書き出す
-    df_new_llm.write_ndjson(repaired_output)
 
 
 
