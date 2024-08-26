@@ -18,6 +18,7 @@ def main():
     
     # load gene synonyms
     df_synonyms = pl.read_csv(config.PATH["synonyms_list"])
+    synonyms_data = df_synonyms.to_dicts()
     
     # percentage of DEG at the time of GEM
     memo_list = df_ann["memo"].to_list()
@@ -29,14 +30,13 @@ def main():
     deg_rate = count_deg_list / count_memo_list
     print(f"DEG percentage at the time of GEM: {deg_rate}")
     
-    # DEGについてLLM結果の正解率を算出
+    # calculate the accuracy of LLM information extraction for DEGs
     df_llm = pl.read_ndjson(config.PATH["llm_results"])
-    df_results, accuracy = step2(pmid_list, df_ann, df_llm, df_synonyms, config.PATH["accuracy_deg"])
+    df_results = step2(pmid_list, df_ann, df_llm, synonyms_data, config.PATH["accuracy_deg"])
     print(df_results)
-    print(f"Accuracy for step2: {accuracy}")
 
 
-def step2(pmid_list, df_ann, df_llm, df_synonyms, outputfilepath):
+def step2(pmid_list, df_ann, df_llm, synonyms_data, outputfilepath):
     """
     evaluate the accuracy of LLM information extraction in finding DEG by genome editing.
     find the TP and TN and caluculate the TP/TP+TN for accuracy.
@@ -44,40 +44,64 @@ def step2(pmid_list, df_ann, df_llm, df_synonyms, outputfilepath):
     results = []
     for pmid in pmid_list:
         row_ann = df_ann.filter(df_ann["pmid"] == pmid)
-        ann_genes = row_ann["genesymbol"][0]
-        # "(NCBI_"でsplitして、前半だけを取り出し、小文字にする
-        ann_gene = ann_genes.split(" (NCBI_")[0].lower()
-        # find the ann_gene in df_synonyms
-        row_synonyms = df_synonyms.filter(df_synonyms["gene"] == ann_gene)
-        synonyms_str = row_synonyms["synonyms"][0]
-        # read synonyms_str as list
-        synonyms_list = ast.literal_eval(synonyms_str)  
+        ann_genes = row_ann["genesymbol"].to_list()
         row_llm = df_llm.filter(df_llm["pmid"] == pmid)
         llm_genes = row_llm["differentially_expressed_genes"][0].to_list()
         llm_genes = [gene.lower() for gene in llm_genes]
-        if row_ann["deg"][0] == 1:
-            # synonyms_listのどれかがllm_genesに含まれている場合
-            if any(synonym in llm_genes for synonym in synonyms_list):
-                results.append({"pmid": pmid, "answer_gene": ann_gene, "result": "Correct"})
+        for gene in ann_genes:
+            if len(row_ann) > 1:
+                row_ann2 = row_ann.filter(row_ann["genesymbol"] == gene)
             else:
-                results.append({"pmid": pmid, "answer_gene": ann_gene, "result": "Incorrect"})
-        elif row_ann["deg"][0] == 0:
-            if any(synonym in llm_genes for synonym in synonyms_list):
-                results.append({"pmid": pmid, "answer_gene": ann_gene, "result": "Incorrect"})
+                row_ann2 = row_ann
+            # "(NCBI_"でsplitして、前半だけを取り出し、小文字にする
+            gene = gene.split(" (NCBI_")[0].lower()
+            target_dict = next((item for item in synonyms_data if item.get("gene") == gene), None)
+            synonyms = target_dict["synonyms"]
+            if type(synonyms) != list:
+                synonyms = ast.literal_eval(synonyms)
             else:
-                results.append({"pmid": pmid, "answer_gene": ann_gene, "result": "Correct"})
-        # if the value of deg column is 2, the row is not counted
-        else:
-            results.append({"pmid": pmid, "answer_gene": ann_gene, "result": "NotCount"})
+                synonyms = synonyms
+                
+            if row_ann2["deg"][0] == 1:
+                # synonyms_listのどれかがllm_genesに含まれている場合
+                if any(alias in synonyms for alias in llm_genes):
+                    results.append({"pmid": pmid, "answer_gene": gene, "result": "TP"})
+                else:
+                    results.append({"pmid": pmid, "answer_gene": gene, "result": "FN"})
+            elif row_ann2["deg"][0] == 0:
+                if any(alias in synonyms for alias in llm_genes):
+                    results.append({"pmid": pmid, "answer_gene": gene, "result": "FP"})
+                else:
+                    results.append({"pmid": pmid, "answer_gene": gene, "result": "TN"})
+            # if the value of deg column is 2, the row is not counted
+            else:
+                results.append({"pmid": pmid, "answer_gene": gene, "result": "NotCount"})
+                
     df_results = pl.DataFrame(results)
     df_results.write_csv(outputfilepath)
-    correct = len(df_results.filter(df_results["result"] == "Correct"))
-    incorrect = len(df_results.filter(df_results["result"] == "Incorrect"))
-    print(correct)
-    print(incorrect)
-    total = correct + incorrect
-    accuracy = correct / total
-    return df_results, accuracy
+    pre_total = len(df_results)
+    not_count = len(df_results.filter(df_results["result"] == "NotCount"))
+    total = pre_total - not_count
+    print(f"total: {total}")
+    tps = len(df_results.filter(df_results["result"] == "TP"))
+    tns = len(df_results.filter(df_results["result"] == "TN"))
+    fps = len(df_results.filter(df_results["result"] == "FP"))
+    print(f"fps:{fps}")
+    fns = len(df_results.filter(df_results["result"] == "FN"))
+    print(f"fns:{fns}")
+    
+    accuracy = (tps + tns) / total
+    print(f"accuracy: {accuracy}")
+    
+    precision = tps / (tps + fps)
+    print(f"precision: {precision}")
+    
+    recall = tps / (tps + fns)
+    print(f"recall: {recall}")
+    
+    f1 = 2 * (precision * recall) / (precision + recall)
+    print(f"f1: {f1}")
+    return df_results
 
 
 if __name__ == "__main__":

@@ -56,9 +56,8 @@ def main():
     
 
     # calculate the accuracy of LLM information extraction
-    df_results, accuracy = step1(pmid_list, df_ann, df_llm, config.PATH["accuracy"], synonyms_data)
+    df_results= step1(pmid_list, df_ann, df_llm, config.PATH["accuracy"], synonyms_data)
     print(df_results)
-    print(f"Accuracy for step1: {accuracy}")
 
 
 
@@ -112,21 +111,23 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
                 # row_ann2 = row_ann.filter(row_ann["genesymbol"] == gene)
                 curation = row_ann2["curation_gene"][0]
                 if curation == 1:
-                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Correct"})
+                    # results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Correct"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "TP"})
                 elif curation == 2:
                     species = row_ann2["memo"][0]
                     if species in llm_species:
-                        results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Correct"})
+                        # results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Correct"})
+                        results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "TP"})
                     else:
-                        results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Incorrect"})
+                        results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "FN"})
                 else:
-                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Incorrect"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "FN"})
             else:
                 curation = row_ann["curation_gene"][0]
                 if curation == 0:
-                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "not_targeted", "result": "Correct"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "not_targeted", "result": "TN"})
                 else:
-                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "not_targeted", "result": "Incorrect"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "not_targeted", "result": "FP"})
     df_results = pl.DataFrame(results)
     # write the results to a csv file
     df_results.write_csv(outputfilepath)
@@ -134,10 +135,29 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
     total = len(df_results)
     print(total)
     # count the number of rows with shown as correct
-    correct = len(df_results.filter(df_results["result"] == "Correct"))
-    print(correct)
-    accuracy = correct / total
-    return df_results, accuracy
+    # correct = len(df_results.filter(df_results["result"] == "Correct"))
+    tps = len(df_results.filter(df_results["result"] == "TP"))
+    tns = len(df_results.filter(df_results["result"] == "TN"))
+    fps = len(df_results.filter(df_results["result"] == "FP"))
+    print(f"fps:{fps}")
+    fns = len(df_results.filter(df_results["result"] == "FN"))
+    print(f"fns:{fns}")
+    
+    accuracy = (tps + tns) / total
+    print(f"accuracy: {accuracy}")
+    
+    precision = tps / (tps + fps)
+    print(f"precision: {precision}")
+    
+    recall = tps / (tps + fns)
+    print(f"recall: {recall}")
+    
+    f1 = 2 * (precision * recall) / (precision + recall)
+    print(f"f1: {f1}")
+    
+    # print(correct)
+    # accuracy = correct / total
+    return df_results
 
 
 def get_genesynonyms_from_genesymbol(gene_name, taxid):
