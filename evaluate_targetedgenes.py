@@ -92,6 +92,8 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
         row_llm = df_llm.filter(df_llm["pmid"] == pmid)
         llm_species = row_llm["species"][0].to_list()
         llm_genes = row_llm["targeted_genes"][0].to_list()
+        # llm_genes = row_llm["targeted genes of genome editing"][0].to_list()
+
         llm_genes = [gene.lower() for gene in llm_genes]
         # print(f"llm_genes: {llm_genes}")
         for gene in ann_genes:
@@ -119,15 +121,15 @@ def step1(pmid_list, df_ann, df_llm, outputfilepath, synonyms_data:list):
                         # results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "Correct"})
                         results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "TP"})
                     else:
-                        results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "FN"})
+                        results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "not_targeted", "result": "FN"})
                 else:
-                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "FN"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "targeted", "result": "FP"})
             else:
                 curation = row_ann["curation_gene"][0]
                 if curation == 0:
                     results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "not_targeted", "result": "TN"})
                 else:
-                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "not_targeted", "result": "FP"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":curation, "llm": "not_targeted", "result": "FN"})
     df_results = pl.DataFrame(results)
     # write the results to a csv file
     df_results.write_csv(outputfilepath)

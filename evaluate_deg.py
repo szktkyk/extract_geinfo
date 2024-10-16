@@ -65,17 +65,17 @@ def step2(pmid_list, df_ann, df_llm, synonyms_data, outputfilepath):
             if row_ann2["deg"][0] == 1:
                 # synonyms_listのどれかがllm_genesに含まれている場合
                 if any(alias in synonyms for alias in llm_genes):
-                    results.append({"pmid": pmid, "answer_gene": gene, "result": "TP"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":1, "llm":"deg", "result": "TP"})
                 else:
-                    results.append({"pmid": pmid, "answer_gene": gene, "result": "FN"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":1, "llm": "not_deg", "result": "FN"})
             elif row_ann2["deg"][0] == 0:
                 if any(alias in synonyms for alias in llm_genes):
-                    results.append({"pmid": pmid, "answer_gene": gene, "result": "FP"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":0, "llm":"deg", "result": "FP"})
                 else:
-                    results.append({"pmid": pmid, "answer_gene": gene, "result": "TN"})
+                    results.append({"pmid": pmid, "answer_gene": gene, "curation":0, "llm":"not_deg", "result": "TN"})
             # if the value of deg column is 2, the row is not counted
             else:
-                results.append({"pmid": pmid, "answer_gene": gene, "result": "NotCount"})
+                results.append({"pmid": pmid, "answer_gene": gene, "curation":row_ann2["deg"][0], "llm":"NotCount", "result": "NotCount"})
                 
     df_results = pl.DataFrame(results)
     df_results.write_csv(outputfilepath)
